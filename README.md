@@ -537,9 +537,11 @@ The suite uses `Queue::fake()` so it never calls the real LLM API — fast, dete
 |---|---|---|
 | Page stuck on "Generating…" forever | Queue worker not running | Run `php artisan queue:work` in a separate terminal. |
 | `AI service returned an error (HTTP 401)` | Bad / missing API key | Verify `OPENAI_API_KEY` and run `php artisan config:clear`. |
+| `AI service returned an error (HTTP 404)` on production but works locally | `OPENAI_BASE_URL` or `OPENAI_MODEL` env contains a typo, trailing whitespace, or accidentally pasted as `KEY=VALUE` instead of just `VALUE` in the host dashboard. | In your hosting dashboard, edit each variable's **Value** field and ensure it contains only the value (e.g. `llama-3.3-70b-versatile`, never `OPENAI_MODEL=llama-3.3-70b-versatile`) with no surrounding whitespace. The `AIService` constructor calls `trim()` defensively, but a wrong value still won't work. |
 | `AI service returned invalid JSON` | Model doesn't respect `response_format` | Switch to a stronger model or one with JSON mode (Groq's `llama-3.1-8b-instant` or `llama-3.3-70b-versatile`, OpenAI `gpt-4o-mini`). |
 | `429 Too Many Requests` after 5 generations | Per-minute rate limit hit | Wait 60 seconds. Adjust limits in `AppServiceProvider` if needed. |
 | `You've hit today's AI usage limit` | Daily quota reached | Increase `AI_DAILY_QUOTA_PER_USER` or wait until midnight server time. |
+| Page stays stuck on "Generating…" forever in production | `QUEUE_CONNECTION=database` is set but no queue worker is running on the host (free tiers usually run only one process). | Set `QUEUE_CONNECTION=sync` so the controller runs the LLM call inline. The controller automatically detects sync mode and skips the queue dispatch to save DB round-trips. |
 | Static export looks unstyled when opened from disk | Tailwind CDN blocked offline | Open via a local web server (e.g. `php -S localhost:9000`) or host the file. |
 | `SQLSTATE[HY000]: General error: 1 no such table: jobs` | Migrations not run | `php artisan migrate`. |
 | Tests fail with database errors | Forgotten migration | `php artisan test` runs migrations on each suite — make sure `:memory:` is set in `phpunit.xml`. |
