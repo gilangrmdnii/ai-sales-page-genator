@@ -31,4 +31,4 @@ php artisan route:cache
 php artisan view:cache
 
 echo "▸ Starting PHP built-in server on 0.0.0.0:${PORT}..."
-exec php -S "0.0.0.0:${PORT}" -t public public/index.php
+exec php -S "0.0.0.0:${PORT}" -t public server.php
