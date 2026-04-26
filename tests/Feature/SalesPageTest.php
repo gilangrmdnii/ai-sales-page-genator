@@ -15,6 +15,15 @@ class SalesPageTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // Tests assert dispatch behavior, so force the database queue driver
+        // (controllers short-circuit the queue when QUEUE_CONNECTION=sync).
+        config(['queue.default' => 'database']);
+    }
+
     private function verifiedUser(): User
     {
         return User::factory()->create(['email_verified_at' => now()]);
