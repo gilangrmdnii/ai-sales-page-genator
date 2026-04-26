@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 set -e
 
+PORT="${PORT:-8080}"
+
+echo "▸ Configuring Apache to listen on port ${PORT}..."
+sed -i "s/^Listen .*/Listen ${PORT}/" /etc/apache2/ports.conf
+sed -i "s|<VirtualHost \*:[0-9]*>|<VirtualHost *:${PORT}>|" /etc/apache2/sites-available/000-default.conf
+
 # If using SQLite, ensure the file exists and is writable by Apache (www-data)
 if [ "${DB_CONNECTION}" = "sqlite" ]; then
     DB_PATH="${DB_DATABASE:-/var/www/html/database/database.sqlite}"
@@ -30,5 +36,5 @@ php artisan config:cache
 php artisan route:cache
 php artisan view:cache
 
-echo "▸ Starting Apache on port ${PORT:-10000}..."
+echo "▸ Starting Apache on port ${PORT}..."
 exec apache2-foreground

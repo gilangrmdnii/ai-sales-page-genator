@@ -30,14 +30,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 # Apache: serve from /public, enable rewrite
-RUN sed -i 's|/var/www/html|/var/www/html/public|g' /etc/apache2/sites-available/000-default.conf \
-    && sed -i 's|/var/www/html|/var/www/html/public|g' /etc/apache2/apache2.conf \
-    && a2enmod rewrite headers
+# Disable conflicting MPMs first — only mpm_prefork works with mod_php
+RUN a2dismod mpm_event mpm_worker 2>/dev/null || true \
+    && a2enmod mpm_prefork rewrite headers \
+    && sed -i 's|/var/www/html|/var/www/html/public|g' /etc/apache2/sites-available/000-default.conf \
+    && sed -i 's|/var/www/html|/var/www/html/public|g' /etc/apache2/apache2.conf
 
-# Listen on Render's $PORT (defaults to 10000)
-ENV PORT=10000
-RUN sed -i 's/Listen 80/Listen ${PORT}/' /etc/apache2/ports.conf \
-    && sed -i 's/<VirtualHost \*:80>/<VirtualHost *:${PORT}>/' /etc/apache2/sites-available/000-default.conf
+# Default PORT — entrypoint will sed actual value at runtime
+ENV PORT=8080
 
 WORKDIR /var/www/html
 
@@ -57,5 +57,5 @@ RUN composer dump-autoload --optimize --no-dev \
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
-EXPOSE 10000
+EXPOSE 8080
 CMD ["/usr/local/bin/entrypoint.sh"]
