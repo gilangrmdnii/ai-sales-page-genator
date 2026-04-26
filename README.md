@@ -2,9 +2,31 @@
 
 > Transform a short product brief into a fully styled, persuasive sales landing page in seconds — powered by an LLM, queued for resilience, designed for delight.
 
+[![Laravel](https://img.shields.io/badge/Laravel-12.x-FF2D20?logo=laravel&logoColor=white)](https://laravel.com)
+[![PHP](https://img.shields.io/badge/PHP-8.3-777BB4?logo=php&logoColor=white)](https://www.php.net)
+[![Tailwind](https://img.shields.io/badge/Tailwind-3.x-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com)
+[![Tests](https://img.shields.io/badge/tests-36%20passing-22c55e)](#testing)
+[![License](https://img.shields.io/badge/license-MIT-blue)](https://opensource.org/licenses/MIT)
+[![Powered by Groq](https://img.shields.io/badge/powered%20by-Groq-f55036)](https://groq.com)
+
 A production-grade Laravel 12 web application that takes a structured product brief and uses a large language model to generate eight cohesive landing-page sections (headline, sub-headline, description, benefits, features, social proof, pricing, CTA), then renders them through one of three professionally designed templates with macro and micro animations.
 
 Built as the reference implementation for **Option B — AI Sales Page Generator**.
+
+---
+
+## 🚀 Live Demo
+
+**Try it now:** **[ai-sales-page-genator-production.up.railway.app](https://ai-sales-page-genator-production.up.railway.app/)**
+
+Sign in instantly with the pre-loaded demo account — three sample sales pages (one per template) are ready to explore, no AI credits required:
+
+| Field | Value |
+|---|---|
+| Email | `demo@demo.com` |
+| Password | `password` |
+
+> 💡 First request after a long idle may take ~10 seconds (cold start on the free Railway tier). Subsequent requests are instant.
 
 ---
 
