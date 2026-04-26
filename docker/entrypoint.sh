@@ -3,23 +3,17 @@ set -e
 
 PORT="${PORT:-8080}"
 
-echo "▸ Configuring Apache to listen on port ${PORT}..."
-sed -i "s/^Listen .*/Listen ${PORT}/" /etc/apache2/ports.conf
-sed -i "s|<VirtualHost \*:[0-9]*>|<VirtualHost *:${PORT}>|" /etc/apache2/sites-available/000-default.conf
-
-# If using SQLite, ensure the file exists and is writable by Apache (www-data)
+# If using SQLite, ensure the file exists and is writable
 if [ "${DB_CONNECTION}" = "sqlite" ]; then
     DB_PATH="${DB_DATABASE:-/var/www/html/database/database.sqlite}"
     echo "▸ Preparing SQLite at ${DB_PATH}..."
     mkdir -p "$(dirname "$DB_PATH")"
     touch "$DB_PATH"
-    chown -R www-data:www-data "$(dirname "$DB_PATH")"
     chmod 664 "$DB_PATH"
     chmod 775 "$(dirname "$DB_PATH")"
 fi
 
-# Storage + cache must be writable too
-chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
+# Storage + cache must be writable
 chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
 
 echo "▸ Running migrations..."
@@ -36,5 +30,5 @@ php artisan config:cache
 php artisan route:cache
 php artisan view:cache
 
-echo "▸ Starting Apache on port ${PORT}..."
-exec apache2-foreground
+echo "▸ Starting PHP built-in server on 0.0.0.0:${PORT}..."
+exec php -S "0.0.0.0:${PORT}" -t public public/index.php

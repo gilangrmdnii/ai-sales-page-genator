@@ -13,9 +13,9 @@ COPY vite.config.js tailwind.config.js postcss.config.js ./
 RUN npm run build
 
 # ─────────────────────────────────────────────────────────────────
-# Stage 2: production image — PHP + Apache + Composer
+# Stage 2: production image — PHP CLI + Composer + built-in server
 # ─────────────────────────────────────────────────────────────────
-FROM php:8.3-apache
+FROM php:8.3-cli
 
 # System deps + PHP extensions Laravel needs
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -29,16 +29,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Composer
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-# Apache: serve from /public, enable rewrite
-# Force-remove all MPM symlinks then enable only mpm_prefork (only one compatible with mod_php)
-RUN rm -f /etc/apache2/mods-enabled/mpm_*.conf /etc/apache2/mods-enabled/mpm_*.load \
-    && ln -s /etc/apache2/mods-available/mpm_prefork.conf /etc/apache2/mods-enabled/mpm_prefork.conf \
-    && ln -s /etc/apache2/mods-available/mpm_prefork.load /etc/apache2/mods-enabled/mpm_prefork.load \
-    && a2enmod rewrite headers \
-    && sed -i 's|/var/www/html|/var/www/html/public|g' /etc/apache2/sites-available/000-default.conf \
-    && sed -i 's|/var/www/html|/var/www/html/public|g' /etc/apache2/apache2.conf
-
-# Default PORT — entrypoint will sed actual value at runtime
 ENV PORT=8080
 
 WORKDIR /var/www/html
@@ -52,7 +42,6 @@ COPY . .
 COPY --from=frontend /app/public/build ./public/build
 
 RUN composer dump-autoload --optimize --no-dev \
-    && chown -R www-data:www-data storage bootstrap/cache \
     && chmod -R 775 storage bootstrap/cache
 
 # Entrypoint runs migrations + cache, then starts Apache
