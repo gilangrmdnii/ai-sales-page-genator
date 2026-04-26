@@ -23,12 +23,21 @@ class AIService
     /** @var array{prompt_tokens:int,completion_tokens:int,total_tokens:int}|null */
     private ?array $lastUsage = null;
 
+    private readonly string $apiKey;
+    private readonly string $baseUrl;
+    private readonly string $model;
+
     public function __construct(
-        private readonly string $apiKey,
-        private readonly string $baseUrl,
-        private readonly string $model,
+        string $apiKey,
+        string $baseUrl,
+        string $model,
         private readonly int $timeout = 60,
     ) {
+        // Trim whitespace defensively — env values copy-pasted from dashboards
+        // often pick up trailing spaces or newlines that break URLs.
+        $this->apiKey  = trim($apiKey);
+        $this->baseUrl = trim($baseUrl);
+        $this->model   = trim($model);
     }
 
     public function lastUsage(): ?array
