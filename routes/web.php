@@ -2,12 +2,63 @@
 
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SalesPageController;
+use App\Services\AIService;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
     return auth()->check()
         ? redirect()->route('sales-pages.index')
         : view('welcome');
+});
+
+// TEMPORARY DEBUG ENDPOINT — remove before final submission
+Route::get('/__debug/ai', function () {
+    $key = (string) config('services.openai.key');
+    $base = (string) config('services.openai.base_url');
+    $model = (string) config('services.openai.model');
+
+    $url = rtrim($base, '/') . '/chat/completions';
+
+    try {
+        $res = Http::timeout(15)
+            ->withToken($key)
+            ->acceptJson()
+            ->asJson()
+            ->post($url, [
+                'model'      => $model,
+                'max_tokens' => 5,
+                'messages'   => [['role' => 'user', 'content' => 'Reply OK']],
+            ]);
+
+        return response()->json([
+            'config' => [
+                'base_url'  => $base,
+                'model'     => $model,
+                'key_first' => substr($key, 0, 8),
+                'key_last'  => substr($key, -4),
+                'key_len'   => strlen($key),
+                'computed_url' => $url,
+            ],
+            'response' => [
+                'status' => $res->status(),
+                'ok'     => $res->successful(),
+                'body'   => $res->body(),
+            ],
+        ], 200, [], JSON_PRETTY_PRINT);
+    } catch (\Throwable $e) {
+        return response()->json([
+            'config' => [
+                'base_url'  => $base,
+                'model'     => $model,
+                'key_first' => substr($key, 0, 8),
+                'key_last'  => substr($key, -4),
+                'key_len'   => strlen($key),
+                'computed_url' => $url,
+            ],
+            'exception' => $e->getMessage(),
+        ], 500, [], JSON_PRETTY_PRINT);
+    }
 });
 
 Route::middleware(['auth', 'verified'])->group(function () {
