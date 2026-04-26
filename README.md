@@ -40,6 +40,7 @@ Sign in instantly with the pre-loaded demo account — three sample sales pages 
 - [LLM Provider Setup](#llm-provider-setup)
 - [Configuration Reference](#configuration-reference)
 - [Running the Application](#running-the-application)
+- [Deployment](#deployment)
 - [Project Structure](#project-structure)
 - [Templates](#templates)
 - [Production Hardening Checklist](#production-hardening-checklist)
@@ -98,12 +99,14 @@ Sign in instantly with the pre-loaded demo account — three sample sales pages 
 |---|---|---|
 | Framework | Laravel 12 (PHP 8.2+) | Modern Laravel with simplified bootstrap, queue + policy primitives in core. |
 | Auth | Laravel Breeze | Minimal, well-tested scaffold; sessions + email verification out of the box. |
-| Database | MySQL / SQLite | MySQL for production; SQLite (`:memory:`) for the test suite. |
-| Queue | Laravel Queue (database driver) | Simple, no extra infra; swap to Redis/Horizon later if needed. |
+| Database | PostgreSQL (production) / SQLite (`:memory:` for tests) | Production runs on managed Postgres; test suite uses in-memory SQLite for speed. |
+| Queue | Laravel Queue — `database` driver locally, `sync` on free hosting | Database queue when a worker is available, sync inline when only one process is allowed. |
 | Frontend build | Vite + Tailwind CSS 3 | Fast HMR, JIT classes, custom keyframes for macro/micro animations. |
-| JS sprinkles | Alpine.js | Sidebar toggle, dropdowns; no SPA overhead. |
-| LLM client | `Illuminate\Support\Facades\Http` to `/chat/completions` | Provider-agnostic; one config swap to change vendors. |
-| Testing | PHPUnit 11 | Feature tests with `RefreshDatabase` and `Queue::fake()`. |
+| JS sprinkles | Alpine.js + vanilla JS | Sidebar toggle, scroll reveal, status polling — no SPA overhead. |
+| LLM client | `Illuminate\Support\Facades\Http` to `/chat/completions` | Provider-agnostic; one config swap to change vendors (Groq, OpenAI, OpenRouter, …). |
+| Runtime image | `php:8.3-cli` + PHP built-in server (4 workers via `PHP_CLI_SERVER_WORKERS`) | Lighter than Apache, no MPM drama, plenty for the demo workload. |
+| Container | Multi-stage Dockerfile (Node → PHP) | One image deploys anywhere; works on Railway, Koyeb, Fly, Render. |
+| Testing | PHPUnit 11 | 36 feature tests with `RefreshDatabase` and `Queue::fake()`. |
 
 ---
 
@@ -199,17 +202,27 @@ The application speaks the **OpenAI Chat Completions** wire format, so it works 
    ```dotenv
    OPENAI_API_KEY=gsk_xxxxxxxxxxxxxxxxxxxx
    OPENAI_BASE_URL=https://api.groq.com/openai/v1
-   OPENAI_MODEL=llama-3.3-70b-versatile
+   OPENAI_MODEL=llama-3.1-8b-instant
    OPENAI_TIMEOUT=60
    ```
 
 4. Clear config cache: `php artisan config:clear`.
 
+### Choosing a Groq model
+
+| Model | Avg latency | Best for |
+|---|---|---|
+| `llama-3.1-8b-instant` ⭐ | **0.5 – 1.5 s** | Default. Fast enough that a sync queue feels instant. |
+| `llama-3.3-70b-versatile` | 3 – 5 s | Slightly stronger copy, but noticeably slower on the free tier. |
+| `mixtral-8x7b-32768` | 1 – 2 s | Solid middle ground (deprecated on some accounts). |
+
+The default in `.env.example` is `llama-3.1-8b-instant` because it makes the synchronous queue setup on free hosting feel snappy. Swap to 70B if you want richer copy and don't mind the wait.
+
 ### Alternate providers
 
 | Provider | `OPENAI_BASE_URL` | Notes |
 |---|---|---|
-| Groq (free) | `https://api.groq.com/openai/v1` | `llama-3.3-70b-versatile`, JSON mode supported. |
+| Groq (free) | `https://api.groq.com/openai/v1` | `llama-3.1-8b-instant`, JSON mode supported. |
 | OpenRouter | `https://openrouter.ai/api/v1` | Many `:free` models (DeepSeek, Llama, Qwen). |
 | Cerebras | `https://api.cerebras.ai/v1` | Free tier, ultra-fast inference. |
 | OpenAI | `https://api.openai.com/v1` | `gpt-4o-mini` works well as a budget default. |
@@ -279,6 +292,76 @@ npm run dev
 > ⚠️ **Without a running queue worker, your sales pages will stay stuck in `pending` forever.** Either run `composer dev` (recommended) or start `queue:work` manually.
 
 Then visit <http://localhost:8000>, register, and create your first sales page.
+
+---
+
+## Deployment
+
+The repo ships with a production-ready `Dockerfile` that builds frontend assets in a Node stage, then bundles the PHP runtime in a slim `php:8.3-cli` image. Apache is intentionally **not** used — a multi-worker PHP built-in server is enough for the demo and avoids MPM headaches on free hosting.
+
+### Live deployment (Railway + Neon)
+
+This repo is currently deployed to [Railway](https://railway.com) with a managed PostgreSQL on Railway/Neon:
+
+| Component | Provider | Cost |
+|---|---|---|
+| Web service | Railway (Docker) | Free trial / $5 hobby |
+| Database | Railway PostgreSQL | Free trial / $5 hobby |
+| LLM | Groq | Free tier |
+
+### Steps to redeploy from scratch
+
+1. **Push the repo to GitHub** (Railway connects via GitHub OAuth).
+2. **New Project → Provision PostgreSQL** in Railway.
+3. **+ New → GitHub Repo** in the same project. Railway auto-detects the `Dockerfile`.
+4. **Variables tab** on the web service, paste:
+   ```dotenv
+   APP_NAME=AI Sales Page Generator
+   APP_ENV=production
+   APP_DEBUG=false
+   APP_KEY=base64:GENERATE_VIA_php_artisan_key:generate_--show
+   APP_URL=https://${{RAILWAY_PUBLIC_DOMAIN}}
+
+   DB_CONNECTION=pgsql
+   DATABASE_URL=${{Postgres.DATABASE_URL}}
+
+   SESSION_DRIVER=database
+   SESSION_ENCRYPT=true
+   CACHE_STORE=database
+   QUEUE_CONNECTION=sync          # free tier has no separate worker — sync is fine
+
+   OPENAI_API_KEY=gsk_xxxxxxxxxxxx
+   OPENAI_BASE_URL=https://api.groq.com/openai/v1
+   OPENAI_MODEL=llama-3.1-8b-instant
+   OPENAI_TIMEOUT=60
+
+   AI_DAILY_QUOTA_PER_USER=20
+   SEED_DEMO=true                 # creates demo@demo.com on first deploy
+   PORT=8080
+   ```
+5. **Settings → Networking → Generate Domain** to get a public URL.
+6. Update `APP_URL` to that URL, save → Railway auto-redeploys.
+
+### Why `QUEUE_CONNECTION=sync` in production?
+
+Most free hosts (Railway, Render, Koyeb) only run **one process**. With no separate background worker, `database` queue jobs would never get picked up. Setting `sync` makes the controller execute the LLM call inline. With `llama-3.1-8b-instant`, the round-trip is fast enough (1–2 s) that the request never times out.
+
+If you upgrade to a paid plan with a real worker, switch to `database` and run `php artisan queue:work --sleep=1 --tries=2 --timeout=120` as a separate service.
+
+### Run with Docker locally
+
+```bash
+# Build (multi-stage: Node → PHP)
+docker build -t salesgen .
+
+# Create a local env file
+cp .env.example .env.docker
+# Edit APP_KEY (php artisan key:generate --show), OPENAI_API_KEY, DB settings
+
+docker run --rm -p 8080:8080 --env-file .env.docker salesgen
+```
+
+Visit `http://localhost:8080`, sign in with `demo@demo.com` / `password`.
 
 ---
 
@@ -454,7 +537,7 @@ The suite uses `Queue::fake()` so it never calls the real LLM API — fast, dete
 |---|---|---|
 | Page stuck on "Generating…" forever | Queue worker not running | Run `php artisan queue:work` in a separate terminal. |
 | `AI service returned an error (HTTP 401)` | Bad / missing API key | Verify `OPENAI_API_KEY` and run `php artisan config:clear`. |
-| `AI service returned invalid JSON` | Model doesn't respect `response_format` | Switch to a stronger model or one with JSON mode (Groq's `llama-3.3-70b-versatile`, OpenAI `gpt-4o-mini`). |
+| `AI service returned invalid JSON` | Model doesn't respect `response_format` | Switch to a stronger model or one with JSON mode (Groq's `llama-3.1-8b-instant` or `llama-3.3-70b-versatile`, OpenAI `gpt-4o-mini`). |
 | `429 Too Many Requests` after 5 generations | Per-minute rate limit hit | Wait 60 seconds. Adjust limits in `AppServiceProvider` if needed. |
 | `You've hit today's AI usage limit` | Daily quota reached | Increase `AI_DAILY_QUOTA_PER_USER` or wait until midnight server time. |
 | Static export looks unstyled when opened from disk | Tailwind CDN blocked offline | Open via a local web server (e.g. `php -S localhost:9000`) or host the file. |
