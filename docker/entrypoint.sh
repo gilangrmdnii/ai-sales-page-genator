@@ -30,5 +30,6 @@ php artisan config:cache
 php artisan route:cache
 php artisan view:cache
 
-echo "▸ Starting PHP built-in server on 0.0.0.0:${PORT}..."
+echo "▸ Starting PHP built-in server on 0.0.0.0:${PORT} (4 workers)..."
+export PHP_CLI_SERVER_WORKERS=4
 exec php -S "0.0.0.0:${PORT}" -t public server.php
