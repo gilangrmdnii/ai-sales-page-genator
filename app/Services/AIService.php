@@ -181,8 +181,11 @@ PROMPT;
 
         if ($response->failed()) {
             Log::error('AIService: API returned error', [
-                'status' => $response->status(),
-                'body'   => $response->body(),
+                'status'   => $response->status(),
+                'body'     => $response->body(),
+                'url'      => rtrim($this->baseUrl, '/') . '/chat/completions',
+                'model'    => $this->model,
+                'key_head' => substr($this->apiKey, 0, 8) . '...',
             ]);
             throw new RuntimeException('AI service returned an error (HTTP ' . $response->status() . ').');
         }
